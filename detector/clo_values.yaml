@@ -1,0 +1,29 @@
+# CLO values for clothing items
+# CLO is a measure of thermal insulation provided by clothing
+
+# Base CLO value for a nude person
+base_clo: 0.16
+
+# CLO values for individual clothing items
+clo_values:
+  # Original model class names with updated CLO values
+  short sleeve top: 0.19  # Similar to t-shirt
+  long sleeve top: 0.25  # Similar to shirt
+  short sleeve outwear: 0.36  # Similar to blazer
+  long sleeve outwear: 0.44   # Similar to jacket/coat
+  vest: 0.22  # Updated from previous value
+  sweater: 0.36  # Updated from previous value
+  shorts: 0.08  # Updated from previous value
+  pants: 0.15  # Updated from previous value
+  skirt: 0.14  # Updated from previous value
+  short sleeve dress: 0.25  # Updated from previous value
+  long sleeve dress: 0.33  # Updated from previous value
+  vest dress: 0.2  # Updated from previous value
+  sling dress: 0.15  # Updated from previous value
+  jumpsuit: 0.2  # Updated from previous value
+  cape: 0.2  # Updated from previous value
+  glasses: 0.00  # No thermal insulation
+  hat: 0.05  # Updated from previous value
+  glove: 0.05  # Same as before
+  scarf: 0.05  # Updated from previous value
+  hood: 0.05  # Updated from previous value

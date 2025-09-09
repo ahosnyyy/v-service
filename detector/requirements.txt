@@ -1,0 +1,18 @@
+# Detector Service Requirements
+
+# ML and data processing
+numpy>=1.21.0,<2.0          # For numerical operations
+onnxruntime>=1.12.0,<2.0    # For running ML models
+Pillow>=8.3.0,<10.0.0       # For image processing
+opencv-python>=4.8.0,<5.0.0  # For image processing
+
+# API and web server
+fastapi>=0.68.0,<1.0.0      # For REST API
+uvicorn>=0.15.0,<1.0.0      # ASGI server
+python-multipart>=0.0.5     # For handling multipart form data (image uploads)
+aiofiles>=0.7.0,<1.0.0      # For async file operations
+
+# Utilities
+PyYAML>=6.0.0               # For configuration file parsing
+requests>=2.25.0,<3.0.0     # For HTTP requests
+python-dateutil>=2.8.2      # For date/time handling

@@ -1,0 +1,32 @@
+# Vision Service Coordinator Configuration
+
+# Coordinator settings
+# detection_interval removed - now using detector.fps instead
+buffer_size: 500           # Maximum frames in shared buffer
+processing_delay: 0      # Delay between processing cycles (seconds)
+
+# Recorder settings
+recorder:
+  fps: 10                  # Target capture FPS for recorder
+
+# Detector settings
+detector:
+  fps: 1                   # Detection FPS (frames per second)
+
+# Service startup settings
+startup:
+  recorder_startup_delay: 2.0    # Seconds to wait after starting recorder
+  detector_startup_delay: 3.0    # Seconds to wait after starting detector
+  max_startup_retries: 3         # Maximum retries for service startup
+
+# Performance settings
+performance:
+  max_workers: 4                 # Maximum worker threads
+  queue_timeout: 5.0             # Queue operation timeout (seconds)
+  retry_attempts: 3              # Number of retry attempts for failed operations
+
+# Logging configuration for coordinator
+logging:
+  level: "WARNING"  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"  # Format with timestamp and level
+  file: null           # No log file

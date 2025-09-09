@@ -1,0 +1,42 @@
+# Detector Configuration File
+
+# Model Configuration
+model:
+  onnx_file: "model.onnx"           # Relative to detector directory
+  img_size: 640
+  conf_thres: 0.6
+  device: "cpu"  # Options: "cpu", "gpu"
+
+# File Paths
+paths:
+  categories_file: "categories.yaml" # Relative to detector directory
+  default_image: "default/default_img.jpg"  # Relative to detector directory
+
+# Inference Settings
+inference:
+  batch_size: 1
+  max_detections: 100
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+
+# CLO Processing
+clo:
+  enabled: true
+  values_file: "clo_values.yaml"     # Relative to detector directory
+
+# Logging
+logging:
+  level: "WARNING"  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"  # Format with timestamp and level
+  enable_console: true
+  enable_file: false   # Explicitly disable file logging
+  file: null           # No log file
+
+# Save Detection Results
+save_results:
+  enabled: true
+  output_dir: "./detections"     # Save detections inside detector directory
