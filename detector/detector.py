@@ -18,6 +18,18 @@ import yaml
 import json
 from datetime import datetime
 
+# Add project root to Python path for imports
+import sys
+from pathlib import Path
+project_root = Path(__file__).parent.parent.absolute()
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+# Add detector directory to Python path for local imports
+detector_dir = Path(__file__).parent.absolute()
+if str(detector_dir) not in sys.path:
+    sys.path.insert(0, str(detector_dir))
+
 # Import configuration and CLO value processing functions
 from config import config
 from clo_processor import map_detections_to_clo

@@ -2,6 +2,13 @@ import os
 import yaml
 from typing import List, Dict, Tuple, Any, Optional
 
+# Add detector directory to Python path for local imports
+import sys
+from pathlib import Path
+detector_dir = Path(__file__).parent.absolute()
+if str(detector_dir) not in sys.path:
+    sys.path.insert(0, str(detector_dir))
+
 # Import configuration
 from config import config
 
