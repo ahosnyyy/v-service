@@ -3,6 +3,7 @@ import sys
 import io
 import uuid
 import base64
+import time
 import numpy as np
 from PIL import Image
 from typing import List, Optional, Dict, Any
@@ -143,7 +144,62 @@ def initialize_frame_buffer():
         # Create a new frame buffer for the detector service
         frame_buffer = FrameBuffer(maxlen=100, timeout=5.0)
         detector_logger.info("Created new frame buffer for detector service")
+        
+        # Start buffer cleanup thread
+        import threading
+        cleanup_thread = threading.Thread(
+            target=_buffer_cleanup_loop,
+            daemon=True,
+            name="DetectorBufferCleanup"
+        )
+        cleanup_thread.start()
+        detector_logger.info("Started detector buffer cleanup thread")
     return frame_buffer
+
+def _buffer_cleanup_loop():
+    """Buffer cleanup loop to keep freshest frames."""
+    global frame_buffer
+    last_cleanup = 0
+    cleanup_interval = 1.0  # Check every second
+    high_utilization_threshold = 0.8  # 80% buffer capacity
+    
+    while True:
+        try:
+            current_time = time.time()
+            
+            if frame_buffer is not None and not frame_buffer.empty():
+                buffer_stats = frame_buffer.get_stats()
+                utilization = buffer_stats.get('utilization', 0)
+                
+                # If buffer is getting full, clear older frames more aggressively
+                if utilization > high_utilization_threshold:
+                    detector_logger.warning(f"Detector buffer utilization high ({utilization:.2f}), clearing older frames")
+                    # Keep only the most recent frames (e.g., last 10%)
+                    frames_to_keep = max(1, int(frame_buffer.maxlen * 0.1))
+                    frames_to_skip = len(frame_buffer) - frames_to_keep
+                    
+                    if frames_to_skip > 0:
+                        # Keep only the newest frames by removing older ones
+                        for _ in range(frames_to_skip):
+                            if not frame_buffer.empty():
+                                frame_buffer.get()  # Remove oldest frame
+                            else:
+                                break
+                        detector_logger.info(f"Cleared {frames_to_skip} older frames, keeping {frames_to_keep} newest frames")
+                
+                # Log buffer statistics periodically
+                if current_time - last_cleanup >= cleanup_interval:
+                    detector_logger.info(f"Detector buffer stats: size={len(frame_buffer)}/{frame_buffer.maxlen}, "
+                                        f"utilization={utilization:.2f}, pushed={buffer_stats.get('total_pushed', 0)}, "
+                                        f"popped={buffer_stats.get('total_popped', 0)}, "
+                                        f"dropped={buffer_stats.get('dropped_frames', 0)}")
+                    last_cleanup = current_time
+            
+            time.sleep(0.1)  # Small delay to avoid busy waiting
+            
+        except Exception as e:
+            detector_logger.error(f"Error in detector buffer cleanup: {e}")
+            time.sleep(1.0)  # Wait longer on error
 
 def save_detection_result(result: InferenceResponse, image_source: str = "unknown") -> Optional[str]:
     """Save detection result to JSON file in a date-based folder
@@ -671,12 +727,38 @@ async def add_frame_to_buffer(file: UploadFile = File(...), frame_name: str = Fo
             detector_logger.debug(f"Added frame {frame_name} to buffer")
             return {"status": "success", "message": f"Frame {frame_name} added to buffer"}
         else:
+            # Buffer is full, but cleanup thread will handle it
             detector_logger.warning(f"Failed to add frame {frame_name} to buffer (buffer full)")
-            return {"status": "error", "message": "Buffer full"}
+            buffer_stats = frame_buffer.get_stats()
+            return {
+                "status": "warning", 
+                "message": "Buffer full, frame dropped", 
+                "buffer_stats": buffer_stats
+            }
             
     except Exception as e:
         detector_logger.error(f"Error adding frame to buffer: {e}")
         raise HTTPException(status_code=500, detail=f"Error adding frame: {str(e)}")
+
+@app.get("/buffer-status")
+async def get_buffer_status():
+    """
+    Get the current status of the detector's frame buffer.
+    """
+    global frame_buffer
+    
+    if frame_buffer is None:
+        return {
+            "status": "not_initialized",
+            "message": "Frame buffer not initialized"
+        }
+    
+    buffer_stats = frame_buffer.get_stats()
+    return {
+        "status": "active",
+        "buffer_stats": buffer_stats,
+        "utilization_percent": buffer_stats.get('utilization', 0) * 100
+    }
 
 if __name__ == "__main__":
     uvicorn.run("detector:app", host=config.api.host, port=config.api.port, reload=config.api.reload)
