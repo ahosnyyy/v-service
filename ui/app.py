@@ -14,16 +14,15 @@ def create_ui(coordinator: 'VisionCoordinator'):
     DETECTOR_API_URL = "http://localhost:8000"
     
     # Global variable to store last detection timestamp
-    last_detection_time = None
+    last_detection_time = [None]  # Use list to make it mutable across function scopes
     
     def call_detector_api():
         """Call the detector API to get latest detection results."""
-        global last_detection_time
         try:
             response = requests.get(f"{DETECTOR_API_URL}/detect-latest", timeout=5)
             if response.status_code == 200:
                 # Update timestamp when detection is successful
-                last_detection_time = datetime.datetime.now()
+                last_detection_time[0] = datetime.datetime.now()
                 return response.json()
             else:
                 print(f"Detector API error: {response.status_code}")
@@ -46,21 +45,19 @@ def create_ui(coordinator: 'VisionCoordinator'):
     
     def get_detection_timestamp():
         """Get formatted detection timestamp."""
-        global last_detection_time
-        if last_detection_time:
+        if last_detection_time[0]:
             # Show time if today, full date if different day
             now = datetime.datetime.now()
-            if last_detection_time.date() == now.date():
-                return last_detection_time.strftime("%H:%M:%S")
+            if last_detection_time[0].date() == now.date():
+                return last_detection_time[0].strftime("%H:%M:%S")
             else:
-                return last_detection_time.strftime("%m/%d %H:%M")
+                return last_detection_time[0].strftime("%m/%d %H:%M")
         else:
             return "Never"
     
     def update_detection_timestamp():
         """Update the detection timestamp display."""
-        global last_detection_time
-        if last_detection_time:
+        if last_detection_time[0]:
             timestamp = get_detection_timestamp()
             return f"<div style='text-align: right; font-size: 0.8em; color: white;'>Last: <span style='font-weight: bold;'>{timestamp}</span></div>"
         else:
