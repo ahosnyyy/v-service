@@ -59,8 +59,12 @@ def create_ui(coordinator: 'VisionCoordinator'):
     
     def update_detection_timestamp():
         """Update the detection timestamp display."""
-        timestamp = get_detection_timestamp()
-        return f"<div style='text-align: right; font-size: 0.8em; color: #6b7280;'>Last: <span style='font-weight: bold; color: #374151;'>{timestamp}</span></div>"
+        global last_detection_time
+        if last_detection_time:
+            timestamp = get_detection_timestamp()
+            return f"<div style='text-align: right; font-size: 0.8em; color: white;'>Last: <span style='font-weight: bold;'>{timestamp}</span></div>"
+        else:
+            return ""  # Hide if no detections done
     
     def get_status_updates():
         status = coordinator.get_status()
@@ -233,7 +237,7 @@ def create_ui(coordinator: 'VisionCoordinator'):
                     with gr.Row():
                         gr.Markdown("**👕 Detections**")
                         detection_timestamp = gr.HTML(
-                            value="<div style='text-align: right; font-size: 0.8em; color: #6b7280;'>Last: <span style='font-weight: bold; color: #374151;'>Never</span></div>"
+                            value=""
                         )
                     detection_summary = gr.HTML("")
         
