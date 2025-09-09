@@ -662,7 +662,7 @@ async def detect_latest_get(onnx_file: str = "model.onnx",
     """
     return await detect_latest(onnx_file, img_size, conf_thres, device, categories_file)
 
-@app.post("/add-frame")
+@app.post("/add-frame", include_in_schema=False)
 async def add_frame_to_buffer(file: UploadFile = File(...), frame_name: str = Form("frame.jpg")):
     """
     Add a frame to the detector's buffer.
