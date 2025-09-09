@@ -84,15 +84,16 @@ class VisionCoordinator:
             # Pass frame buffer reference to detector service
             set_frame_buffer(self.frame_buffer)
             
-            # Start frame processing
+            # Disable automatic frame processing - only manual detection via /detect-latest
             self.running = True
-            self.processing_thread = threading.Thread(
-                target=self._process_frames,
+            # Start frame buffer population thread (sends frames to detector's buffer)
+            self.buffer_thread = threading.Thread(
+                target=self._populate_detector_buffer,
                 daemon=True,
-                name="FrameProcessor"
+                name="DetectorBufferPopulator"
             )
-            self.processing_thread.start()
-            self.logger.info("Vision Service ready")
+            self.buffer_thread.start()
+            self.logger.info("Vision Service ready (manual detection only)")
             return True
             
         except Exception as e:
@@ -106,9 +107,14 @@ class VisionCoordinator:
         self.logger.info("Stopping Vision Service")
         
         # Stop frame processing
-        if self.processing_thread and self.processing_thread.is_alive():
+        if hasattr(self, 'processing_thread') and self.processing_thread and self.processing_thread.is_alive():
             self.processing_thread.join(timeout=5.0)
             self.logger.info("Frame processing stopped")
+        
+        # Stop detector buffer population
+        if hasattr(self, 'buffer_thread') and self.buffer_thread and self.buffer_thread.is_alive():
+            self.buffer_thread.join(timeout=5.0)
+            self.logger.info("Detector buffer population stopped")
         
         # Stop detector service
         if self.detector:
@@ -125,6 +131,99 @@ class VisionCoordinator:
             self.frame_buffer.clear()
         
         self.logger.info("Vision Service stopped")
+    
+    def _add_frame_to_detector_buffer(self, frame, frame_name: str):
+        """Add frame to detector's buffer via HTTP API."""
+        try:
+            import requests
+            import io
+            from PIL import Image
+            
+            # Convert frame to bytes
+            if hasattr(frame, 'save'):  # PIL Image
+                img_bytes = io.BytesIO()
+                frame.save(img_bytes, format='JPEG', quality=85)
+                frame_bytes = img_bytes.getvalue()
+            elif hasattr(frame, 'tobytes'):  # numpy array
+                if len(frame.shape) == 3:
+                    img = Image.fromarray(frame)
+                    img_bytes = io.BytesIO()
+                    img.save(img_bytes, format='JPEG', quality=85)
+                    frame_bytes = img_bytes.getvalue()
+                else:
+                    self.logger.error("Unsupported numpy array shape for detector buffer")
+                    return
+            elif isinstance(frame, bytes):
+                frame_bytes = frame
+            else:
+                self.logger.error(f"Unsupported frame data type for detector buffer: {type(frame)}")
+                return
+            
+            # Send frame to detector's buffer
+            detector_url = f"http://localhost:{self.detector.client.api_port}/add-frame"
+            response = requests.post(
+                detector_url,
+                data={"frame_name": frame_name},
+                files={"frame_data": (frame_name, frame_bytes, "image/jpeg")},
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                self.logger.debug(f"Added frame {frame_name} to detector buffer")
+            else:
+                self.logger.warning(f"Failed to add frame to detector buffer: {response.status_code}")
+                
+        except Exception as e:
+            self.logger.error(f"Error adding frame to detector buffer: {e}")
+    
+    def _populate_detector_buffer(self) -> None:
+        """Populate detector's buffer with frames from coordinator's buffer."""
+        frame_count = 0
+        last_buffer_log = 0
+        
+        while self.running:
+            try:
+                current_time = time.time()
+                
+                if not self.frame_buffer or self.frame_buffer.empty():
+                    # Log buffer status every 5 seconds
+                    if current_time - last_buffer_log >= 5.0:
+                        self.logger.info("Coordinator buffer is empty. Waiting for frames...")
+                        last_buffer_log = current_time
+                    time.sleep(0.1)
+                    continue
+                
+                # Get frame from coordinator's buffer
+                frame_data = self.frame_buffer.get_latest()
+                
+                if frame_data is None:
+                    continue
+                
+                frame_count += 1
+                
+                # Extract frame data and name
+                if isinstance(frame_data, tuple) and len(frame_data) == 2:
+                    frame, frame_name = frame_data
+                else:
+                    frame = frame_data
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+                    frame_name = f"frame_{timestamp}.jpg"
+                
+                # Send frame to detector's buffer
+                if self.detector and self.detector.is_ready():
+                    self._add_frame_to_detector_buffer(frame, frame_name)
+                
+                # Log progress every 30 frames
+                if frame_count % 30 == 0:
+                    self.logger.info(f"Populated detector buffer with {frame_count} frames")
+                
+                # Small delay to avoid overwhelming the detector
+                time.sleep(0.1)
+                
+            except Exception as e:
+                self.logger.error(f"Error in detector buffer population: {e}")
+                time.sleep(0.1)
     
     def _process_frames(self) -> None:
         """Main frame processing loop."""
@@ -216,9 +315,12 @@ class VisionCoordinator:
                 # Process frame
                 self.logger.info(f"Processing frame {frame_count} ({frame_name}) at {self.detection_fps} FPS")
                 
-                # Send frame to detector via HTTP API
+                # Send frame to detector's buffer via HTTP API
                 if self.detector and self.detector.is_ready():
                     try:
+                        # Also add frame to detector's buffer
+                        self._add_frame_to_detector_buffer(frame, frame_name)
+                        
                         # Ensure frame_name is passed correctly
                         self.logger.debug(f"Sending frame {frame_name} to detector")
                         detection_result = self.detector.detect_frame(frame, frame_name)

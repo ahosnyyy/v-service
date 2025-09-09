@@ -92,6 +92,12 @@ detector_logger = setup_detector_logging()
 # Initialize FastAPI app
 app = FastAPI(title="RT-DETR v2 ONNX Inference API", description="API for object detection using RT-DETR v2 ONNX")
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize frame buffer on startup."""
+    initialize_frame_buffer()
+    detector_logger.info("Detector service started")
+
 # Model configuration
 class ModelConfig(BaseModel):
     onnx_file: str = config.model.onnx_file
@@ -124,6 +130,20 @@ def set_frame_buffer(buffer: FrameBuffer):
     """Set the frame buffer reference for the detector service."""
     global frame_buffer
     frame_buffer = buffer
+
+def get_frame_buffer():
+    """Get the frame buffer reference."""
+    global frame_buffer
+    return frame_buffer
+
+def initialize_frame_buffer():
+    """Initialize frame buffer if not already set."""
+    global frame_buffer
+    if frame_buffer is None:
+        # Create a new frame buffer for the detector service
+        frame_buffer = FrameBuffer(maxlen=100, timeout=5.0)
+        detector_logger.info("Created new frame buffer for detector service")
+    return frame_buffer
 
 def save_detection_result(result: InferenceResponse, image_source: str = "unknown") -> Optional[str]:
     """Save detection result to JSON file in a date-based folder
@@ -547,6 +567,10 @@ async def detect_latest(onnx_file: str = "model.onnx",
     
     detector_logger.info(f"Received detect-latest request")
     
+    # Ensure frame buffer is initialized
+    if frame_buffer is None:
+        initialize_frame_buffer()
+    
     if frame_buffer is None:
         raise HTTPException(status_code=503, detail="Frame buffer not available")
     
@@ -616,6 +640,40 @@ async def detect_latest_get(onnx_file: str = "model.onnx",
     No file upload required - uses the latest frame from the camera buffer.
     """
     return await detect_latest(onnx_file, img_size, conf_thres, device, categories_file)
+
+@app.post("/add-frame")
+async def add_frame_to_buffer(frame_data: bytes, frame_name: str = "frame.jpg"):
+    """
+    Add a frame to the detector's buffer.
+    This endpoint allows the coordinator to populate the detector's buffer.
+    """
+    global frame_buffer
+    
+    # Ensure frame buffer is initialized
+    if frame_buffer is None:
+        initialize_frame_buffer()
+    
+    try:
+        # Convert bytes to frame (assuming it's a JPEG image)
+        from PIL import Image
+        import io
+        
+        # Convert bytes to PIL Image
+        img = Image.open(io.BytesIO(frame_data))
+        
+        # Add frame to buffer
+        success = frame_buffer.put(img, frame_name)
+        
+        if success:
+            detector_logger.debug(f"Added frame {frame_name} to buffer")
+            return {"status": "success", "message": f"Frame {frame_name} added to buffer"}
+        else:
+            detector_logger.warning(f"Failed to add frame {frame_name} to buffer (buffer full)")
+            return {"status": "error", "message": "Buffer full"}
+            
+    except Exception as e:
+        detector_logger.error(f"Error adding frame to buffer: {e}")
+        raise HTTPException(status_code=500, detail=f"Error adding frame: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run("detector:app", host=config.api.host, port=config.api.port, reload=config.api.reload)
