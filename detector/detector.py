@@ -532,5 +532,90 @@ async def detect(file: Optional[UploadFile] = None,
     
     return result
 
+@app.post("/detect-latest", response_model=InferenceResponse)
+async def detect_latest(onnx_file: str = "model.onnx",
+                       img_size: int = 640,
+                       conf_thres: float = 0.6,
+                       device: str = "cpu",
+                       categories_file: str = "categories.yaml"):
+    """
+    Detect objects in the latest frame from the buffer.
+    This endpoint pulls the freshest frame from the shared buffer and processes it.
+    No file upload required - uses the latest frame from the camera buffer.
+    """
+    global frame_buffer
+    
+    detector_logger.info(f"Received detect-latest request")
+    
+    if frame_buffer is None:
+        raise HTTPException(status_code=503, detail="Frame buffer not available")
+    
+    if frame_buffer.empty():
+        raise HTTPException(status_code=404, detail="No frames available in buffer")
+    
+    # Get the latest frame from buffer
+    frame_data = frame_buffer.get_latest(block=False)  # Non-blocking
+    if frame_data is None:
+        raise HTTPException(status_code=404, detail="No frames available")
+    
+    # Extract frame and frame_name
+    if isinstance(frame_data, tuple) and len(frame_data) == 2:
+        frame, frame_name = frame_data
+    else:
+        frame = frame_data
+        frame_name = f"frame_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]}.jpg"
+    
+    # Convert frame to bytes for processing
+    if hasattr(frame, 'save'):  # PIL Image
+        img_bytes = io.BytesIO()
+        frame.save(img_bytes, format='JPEG', quality=85)
+        contents = img_bytes.getvalue()
+    elif hasattr(frame, 'tobytes'):  # numpy array
+        if len(frame.shape) == 3:
+            img = Image.fromarray(frame)
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format='JPEG', quality=85)
+            contents = img_bytes.getvalue()
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported frame format")
+    elif isinstance(frame, bytes):
+        contents = frame
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported frame data type")
+    
+    # Create model config
+    model_config = ModelConfig(
+        onnx_file=onnx_file,
+        img_size=img_size,
+        conf_thres=conf_thres,
+        device=device,
+        categories_file=categories_file
+    )
+    
+    # Process image
+    detector_logger.info(f"Processing latest frame ({frame_name}) for on-demand detection")
+    result = await process_image(contents, model_config)
+    detector_logger.info(f"On-demand detection completed: {len(result.detections)} objects detected")
+    
+    # Save detection result if enabled
+    saved_path = save_detection_result(result, frame_name)
+    if saved_path:
+        detector_logger.info(f"On-demand detection result saved to: {saved_path}")
+    
+    return result
+
+@app.get("/detect-latest", response_model=InferenceResponse)
+async def detect_latest_get(onnx_file: str = "model.onnx",
+                           img_size: int = 640,
+                           conf_thres: float = 0.6,
+                           device: str = "cpu",
+                           categories_file: str = "categories.yaml"):
+    """
+    Detect objects in the latest frame from the buffer (GET version).
+    This endpoint pulls the freshest frame from the shared buffer and processes it.
+    No file upload required - uses the latest frame from the camera buffer.
+    """
+    return await detect_latest(onnx_file, img_size, conf_thres, device, categories_file)
+
 if __name__ == "__main__":
     uvicorn.run("detector:app", host=config.api.host, port=config.api.port, reload=config.api.reload)
