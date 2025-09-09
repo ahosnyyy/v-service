@@ -115,9 +115,9 @@ ui:
 
 ## Running the Services
 
-### Run All Services
+### Run Without UI (Default)
 
-Start the complete vision service:
+Start the vision service without web interface:
 
 ```bash
 python run.py
@@ -127,20 +127,28 @@ This will start:
 - Recorder service (camera capture)
 - Detector service (ONNX inference API)
 - Coordinator (orchestration)
-- Web UI (monitoring interface)
+- API endpoints available for external services
 
-### Run with UI Only
+### Run With UI
 
-Start the service with web UI only (no camera recording):
+Start the vision service with web interface:
 
 ```bash
 python run.py --ui
 ```
 
 This will start:
+- Recorder service (camera capture)
 - Detector service (ONNX inference API)
+- Coordinator (orchestration)
 - Web UI (monitoring interface)
-- Manual detection mode (no automatic camera capture)
+
+### Service Comparison
+
+| Mode | Camera | Recorder | Detector | UI | Use Case |
+|------|--------|----------|----------|----|---------| 
+| `python run.py` | ✅ | ✅ | ✅ | ❌ | API service only |
+| `python run.py --ui` | ✅ | ✅ | ✅ | ✅ | Full service with UI |
 
 ## Usage
 
