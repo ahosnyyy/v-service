@@ -1,6 +1,6 @@
 import os
 from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 class ModelConfig(BaseModel):
     """Model configuration settings"""
@@ -36,7 +36,12 @@ class LoggingConfig(BaseModel):
     level: str = Field(default="INFO", description="Log level")
     enable_console: bool = Field(default=True, description="Enable console logging")
     enable_file: bool = Field(default=False, description="Enable file logging")
-    file: str = Field(default="./logs/detector.log", description="Log file path")
+    file: Optional[str] = Field(default="./logs/detector.log", description="Log file path")
+    
+    @validator('file', pre=True)
+    def handle_none_file(cls, v):
+        """Handle None values for file field"""
+        return v if v is not None else None
 
 class SaveResultsConfig(BaseModel):
     """Detection results saving configuration"""
@@ -64,6 +69,7 @@ class DetectorConfig(BaseModel):
             
             with open(config_path, 'r') as f:
                 data = yaml.safe_load(f)
+            
             return cls(**data)
         except Exception as e:
             print(f"Error loading config from {yaml_file}: {e}")

@@ -1,12 +1,42 @@
 import gradio as gr
 import datetime
 import time
+import requests
+import numpy as np
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from coordinator.coordinator import VisionCoordinator
 
 def create_ui(coordinator: 'VisionCoordinator'):
+    
+    # Detector API configuration
+    DETECTOR_API_URL = "http://localhost:8000"
+    
+    def call_detector_api():
+        """Call the detector API to get latest detection results."""
+        try:
+            response = requests.get(f"{DETECTOR_API_URL}/detect-latest", timeout=5)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"Detector API error: {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"Error calling detector API: {e}")
+            return None
+    
+    def get_detector_buffer_status():
+        """Get detector buffer status."""
+        try:
+            response = requests.get(f"{DETECTOR_API_URL}/buffer-status", timeout=5)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(f"Error getting buffer status: {e}")
+            return None
     
     def get_status_updates():
         status = coordinator.get_status()
@@ -32,13 +62,17 @@ def create_ui(coordinator: 'VisionCoordinator'):
         
         detector_fps = status.get("detection_fps", 0)
         
-        # Get buffer statistics
-        buffer_stats = {}
+        # Get buffer statistics from both coordinator and detector
+        coordinator_buffer_stats = {}
         if coordinator.frame_buffer:
             try:
-                buffer_stats = coordinator.frame_buffer.get_stats()
+                coordinator_buffer_stats = coordinator.frame_buffer.get_stats()
             except:
-                buffer_stats = {}
+                coordinator_buffer_stats = {}
+        
+        # Get detector buffer status
+        detector_buffer_status = get_detector_buffer_status()
+        detector_buffer_stats = detector_buffer_status.get('buffer_stats', {}) if detector_buffer_status else {}
 
         recorder_active = status.get('recorder_active')
         detector_active = status.get('detector_active')
@@ -50,70 +84,76 @@ def create_ui(coordinator: 'VisionCoordinator'):
         
         # Include buffer info in subtitle
         buffer_info = ""
-        if buffer_stats:
-            buffer_size = buffer_stats.get('current_size', 0)
-            buffer_max = buffer_stats.get('max_size', 0)
-            buffer_util = buffer_stats.get('utilization', 0) * 100
-            buffer_info = f" | Buffer: {buffer_size}/{buffer_max} ({buffer_util:.1f}%)"
+        if coordinator_buffer_stats or detector_buffer_stats:
+            coord_size = coordinator_buffer_stats.get('current_size', 0)
+            coord_max = coordinator_buffer_stats.get('max_size', 0)
+            coord_util = coordinator_buffer_stats.get('utilization', 0) * 100
+            
+            det_size = detector_buffer_stats.get('current_size', 0)
+            det_max = detector_buffer_stats.get('max_size', 0)
+            det_util = detector_buffer_stats.get('utilization', 0) * 100
+            
+            buffer_info = f" | Coord Buffer: {coord_size}/{coord_max} ({coord_util:.1f}%) | Detector Buffer: {det_size}/{det_max} ({det_util:.1f}%)"
         
         subtitle = f"<div style='text-align: right;'>Real-time status as of: {timestamp}</div>"
 
         return subtitle, recorder_status_md, detector_status_md
 
     def get_detection_frame():
-        # Get the frame with detection overlays drawn
-        if hasattr(coordinator, 'last_detection_frame_with_overlays') and coordinator.last_detection_frame_with_overlays is not None:
-            frame = coordinator.last_detection_frame_with_overlays.copy()
-            
-            # Check if frame needs color conversion (BGR to RGB)
-            import numpy as np
-            
-            if isinstance(frame, np.ndarray):
-                # OpenCV uses BGR, but PIL/Gradio expects RGB
-                if len(frame.shape) == 3 and frame.shape[2] == 3:
-                    # Convert BGR to RGB
-                    frame = frame[:, :, ::-1]
-                
-                return frame
-        
-        # Fallback to original frame if overlay frame not available
+        # Since we disabled automatic detection, we need to get frames from coordinator's buffer
+        # The coordinator still has frames, but no automatic processing
         if hasattr(coordinator, 'last_detection_frame') and coordinator.last_detection_frame is not None:
             frame = coordinator.last_detection_frame.copy()
             
-            import numpy as np
             if isinstance(frame, np.ndarray):
                 if len(frame.shape) == 3 and frame.shape[2] == 3:
+                    # Convert BGR to RGB
                     frame = frame[:, :, ::-1]
                 return frame
         
-        return None # Return None if no detection frame is available
+        # Try to get latest frame from coordinator's buffer
+        if coordinator.frame_buffer and not coordinator.frame_buffer.empty():
+            try:
+                frame_data = coordinator.frame_buffer.get_latest(block=False)
+                if frame_data is not None:
+                    if isinstance(frame_data, tuple) and len(frame_data) == 2:
+                        frame = frame_data[0]
+                    else:
+                        frame = frame_data
+                    
+                    if isinstance(frame, np.ndarray):
+                        if len(frame.shape) == 3 and frame.shape[2] == 3:
+                            frame = frame[:, :, ::-1]
+                        return frame
+            except:
+                pass
+        
+        return None # Return None if no frame is available
 
     def get_detection_summary():
-        # Get actual detection data from coordinator
+        # Call detector API to get latest detection results
         try:
-            # Check coordinator for latest detection results
-            if hasattr(coordinator, 'last_detection_result') and coordinator.last_detection_result:
-                detection_result = coordinator.last_detection_result
-                if detection_result and 'detections' in detection_result:
-                    detections = detection_result['detections']
-                    
-                    if detections:
-                        # Create styled tags for each detection with confidence
-                        tags = []
-                        for det in detections:
-                            class_name = det.get('class') or det.get('class_name') or det.get('label') or det.get('name') or 'unknown'
-                            confidence = det.get('confidence', 0)
-                            conf_percent = int(confidence * 100) if confidence <= 1 else int(confidence)
-                            
-                            # Create styled tag similar to status tags
-                            tag = f"<span style='background-color: #3b82f6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-right: 4px; display: inline-block;'>{class_name} ({conf_percent}%)</span>"
-                            tags.append(tag)
+            detection_result = call_detector_api()
+            if detection_result and 'detections' in detection_result:
+                detections = detection_result['detections']
+                
+                if detections:
+                    # Create styled tags for each detection with confidence
+                    tags = []
+                    for det in detections:
+                        class_name = det.get('class') or det.get('class_name') or det.get('label') or det.get('name') or 'unknown'
+                        confidence = det.get('confidence', 0)
+                        conf_percent = int(confidence * 100) if confidence <= 1 else int(confidence)
                         
-                        summary_md = " ".join(tags)
-                        return summary_md
-                    else:
-                        # Inference was done but no detections found
-                        return "<span style='color: #6b7280; font-style: italic;'>Nothing detected</span>"
+                        # Create styled tag similar to status tags
+                        tag = f"<span style='background-color: #3b82f6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-right: 4px; display: inline-block;'>{class_name} ({conf_percent}%)</span>"
+                        tags.append(tag)
+                    
+                    summary_md = " ".join(tags)
+                    return summary_md
+                else:
+                    # Inference was done but no detections found
+                    return "<span style='color: #6b7280; font-style: italic;'>Nothing detected</span>"
             
             # Return empty string if no inference has been done yet
             return ""
@@ -159,8 +199,10 @@ def create_ui(coordinator: 'VisionCoordinator'):
                             value="<div style='display: flex; justify-content: space-between; align-items: center;'>Rate: 1 FPS <span style='background-color: #22c55e; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;'>ACTIVE</span></div>"
                         )
                     
-                    # Refresh button
-                    refresh_btn = gr.Button("🔄 Refresh Status", variant="primary", size="sm")
+                    # Control buttons
+                    with gr.Row():
+                        refresh_btn = gr.Button("🔄 Refresh Status", variant="primary", size="sm")
+                        detect_btn = gr.Button("🔍 Run Detection", variant="secondary", size="sm")
                 
                 # Detection summary section
                 with gr.Group():
@@ -180,24 +222,25 @@ def create_ui(coordinator: 'VisionCoordinator'):
             outputs=[detection_image]
         )
         
-        refresh_btn.click(
+        # Manual detection button
+        detect_btn.click(
             fn=get_detection_summary,
             inputs=None,
             outputs=[detection_summary]
         )
         
-        # Auto-refresh detection frame and summary at detector rate (every 1 second based on 1 FPS)
-        detection_timer = gr.Timer(1)
-        detection_timer.tick(
+        detect_btn.click(
             fn=get_detection_frame,
             inputs=None,
             outputs=[detection_image]
         )
         
+        # Auto-refresh detection frame every 2 seconds (manual detection mode)
+        detection_timer = gr.Timer(2)
         detection_timer.tick(
-            fn=get_detection_summary,
+            fn=get_detection_frame,
             inputs=None,
-            outputs=[detection_summary]
+            outputs=[detection_image]
         )
         
         # Auto-refresh status every 5 seconds
