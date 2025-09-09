@@ -196,7 +196,7 @@ class Recorder:
         """Save a frame to disk in a date-based folder."""
         # Skip if disk copy is disabled
         if not self.config['recorder']['keep_disk_copy']:
-            return False
+            return False, None
         
         # Get current date for folder name
         current_date = datetime.now().strftime("%Y%m%d")
@@ -309,6 +309,10 @@ class Recorder:
     
     def is_running(self):
         """Check if the recorder service is running."""
+        # If keep_disk_copy is disabled, show as offline in UI
+        if not self.config['recorder']['keep_disk_copy']:
+            return False
+        
         return self.running and self.cap is not None and self.cap.isOpened()
     
     def _capture_loop(self):
