@@ -13,11 +13,17 @@ def create_ui(coordinator: 'VisionCoordinator'):
     # Detector API configuration
     DETECTOR_API_URL = "http://localhost:8000"
     
+    # Global variable to store last detection timestamp
+    last_detection_time = None
+    
     def call_detector_api():
         """Call the detector API to get latest detection results."""
+        global last_detection_time
         try:
             response = requests.get(f"{DETECTOR_API_URL}/detect-latest", timeout=5)
             if response.status_code == 200:
+                # Update timestamp when detection is successful
+                last_detection_time = datetime.datetime.now()
                 return response.json()
             else:
                 print(f"Detector API error: {response.status_code}")
@@ -37,6 +43,24 @@ def create_ui(coordinator: 'VisionCoordinator'):
         except Exception as e:
             print(f"Error getting buffer status: {e}")
             return None
+    
+    def get_detection_timestamp():
+        """Get formatted detection timestamp."""
+        global last_detection_time
+        if last_detection_time:
+            # Show time if today, full date if different day
+            now = datetime.datetime.now()
+            if last_detection_time.date() == now.date():
+                return last_detection_time.strftime("%H:%M:%S")
+            else:
+                return last_detection_time.strftime("%m/%d %H:%M")
+        else:
+            return "Never"
+    
+    def update_detection_timestamp():
+        """Update the detection timestamp display."""
+        timestamp = get_detection_timestamp()
+        return f"<div style='text-align: right; font-size: 0.8em; color: #6b7280;'>Last: <span style='font-weight: bold; color: #374151;'>{timestamp}</span></div>"
     
     def get_status_updates():
         status = coordinator.get_status()
@@ -172,7 +196,7 @@ def create_ui(coordinator: 'VisionCoordinator'):
             # Left column - Detection frame only
             with gr.Column(scale=3):
                 with gr.Group():
-                    gr.Markdown("**📷 Live Detection Feed**")
+                    gr.Markdown("**📷 Camera Feed**")
                     detection_image = gr.Image(
                         label="Clothing", 
                         type="pil", 
@@ -206,7 +230,11 @@ def create_ui(coordinator: 'VisionCoordinator'):
                 
                 # Detection summary section
                 with gr.Group():
-                    gr.Markdown("**👕 Detections**")
+                    with gr.Row():
+                        gr.Markdown("**👕 Detections**")
+                        detection_timestamp = gr.HTML(
+                            value="<div style='text-align: right; font-size: 0.8em; color: #6b7280;'>Last: <span style='font-weight: bold; color: #374151;'>Never</span></div>"
+                        )
                     detection_summary = gr.HTML("")
         
         # Set up event handlers
@@ -235,12 +263,24 @@ def create_ui(coordinator: 'VisionCoordinator'):
             outputs=[detection_image]
         )
         
+        detect_btn.click(
+            fn=update_detection_timestamp,
+            inputs=None,
+            outputs=[detection_timestamp]
+        )
+        
         # Auto-refresh detection frame every 2 seconds (manual detection mode)
         detection_timer = gr.Timer(2)
         detection_timer.tick(
             fn=get_detection_frame,
             inputs=None,
             outputs=[detection_image]
+        )
+        
+        detection_timer.tick(
+            fn=update_detection_timestamp,
+            inputs=None,
+            outputs=[detection_timestamp]
         )
         
         # Auto-refresh status every 5 seconds
@@ -262,6 +302,12 @@ def create_ui(coordinator: 'VisionCoordinator'):
             fn=get_detection_summary,
             inputs=None,
             outputs=[detection_summary]
+        )
+        
+        app.load(
+            fn=update_detection_timestamp,
+            inputs=None,
+            outputs=[detection_timestamp]
         )
 
     return app
