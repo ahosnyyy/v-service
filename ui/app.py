@@ -31,17 +31,6 @@ def create_ui(coordinator: 'VisionCoordinator'):
             print(f"Error calling detector API: {e}")
             return None
     
-    def get_detector_buffer_status():
-        """Get detector buffer status."""
-        try:
-            response = requests.get(f"{DETECTOR_API_URL}/buffer-status", timeout=5)
-            if response.status_code == 200:
-                return response.json()
-            else:
-                return None
-        except Exception as e:
-            print(f"Error getting buffer status: {e}")
-            return None
     
     def get_detection_timestamp():
         """Get formatted detection timestamp."""
@@ -95,9 +84,7 @@ def create_ui(coordinator: 'VisionCoordinator'):
             except:
                 coordinator_buffer_stats = {}
         
-        # Get detector buffer status
-        detector_buffer_status = get_detector_buffer_status()
-        detector_buffer_stats = detector_buffer_status.get('buffer_stats', {}) if detector_buffer_status else {}
+        # Detector buffer status removed - no longer available
 
         recorder_active = status.get('recorder_active')
         detector_active = status.get('detector_active')
@@ -109,16 +96,12 @@ def create_ui(coordinator: 'VisionCoordinator'):
         
         # Include buffer info in subtitle
         buffer_info = ""
-        if coordinator_buffer_stats or detector_buffer_stats:
+        if coordinator_buffer_stats:
             coord_size = coordinator_buffer_stats.get('current_size', 0)
             coord_max = coordinator_buffer_stats.get('max_size', 0)
             coord_util = coordinator_buffer_stats.get('utilization', 0) * 100
             
-            det_size = detector_buffer_stats.get('current_size', 0)
-            det_max = detector_buffer_stats.get('max_size', 0)
-            det_util = detector_buffer_stats.get('utilization', 0) * 100
-            
-            buffer_info = f" | Coord Buffer: {coord_size}/{coord_max} ({coord_util:.1f}%) | Detector Buffer: {det_size}/{det_max} ({det_util:.1f}%)"
+            buffer_info = f" | Buffer: {coord_size}/{coord_max} ({coord_util:.1f}%)"
         
         subtitle = f"<div style='text-align: right;'>Real-time status as of: {timestamp}</div>"
 

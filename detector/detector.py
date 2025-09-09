@@ -438,41 +438,6 @@ async def process_image(image_data: bytes, model_config: ModelConfig) -> Inferen
 async def root():
     return {"message": "RT-DETR v2 ONNX Inference API is running. Use /docs for API documentation."}
 
-@app.get("/saved-detections")
-async def list_saved_detections():
-    """List saved detection result files"""
-    if not config.save_results.enabled:
-        raise HTTPException(status_code=400, detail="Detection result saving is disabled")
-    
-    try:
-        detection_dir = config.save_results.output_dir
-        if not os.path.exists(detection_dir):
-            return {"saved_detections": [], "total": 0}
-        
-        files = []
-        for filename in os.listdir(detection_dir):
-            if filename.endswith('.json'):
-                file_path = os.path.join(detection_dir, filename)
-                file_stat = os.stat(file_path)
-                files.append({
-                    "filename": filename,
-                    "size_bytes": file_stat.st_size,
-                    "created": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
-                    "modified": datetime.fromtimestamp(file_stat.st_mtime).isoformat()
-                })
-        
-        # Sort by creation time (newest first)
-        files.sort(key=lambda x: x["created"], reverse=True)
-        
-        return {
-            "saved_detections": files,
-            "total": len(files),
-            "output_directory": detection_dir
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing saved detections: {str(e)}")
-
 @app.get("/detect-default", response_model=InferenceResponse)
 async def detect_default(onnx_file: str = "model.onnx",
                       img_size: int = 640,
@@ -740,25 +705,6 @@ async def add_frame_to_buffer(file: UploadFile = File(...), frame_name: str = Fo
         detector_logger.error(f"Error adding frame to buffer: {e}")
         raise HTTPException(status_code=500, detail=f"Error adding frame: {str(e)}")
 
-@app.get("/buffer-status")
-async def get_buffer_status():
-    """
-    Get the current status of the detector's frame buffer.
-    """
-    global frame_buffer
-    
-    if frame_buffer is None:
-        return {
-            "status": "not_initialized",
-            "message": "Frame buffer not initialized"
-        }
-    
-    buffer_stats = frame_buffer.get_stats()
-    return {
-        "status": "active",
-        "buffer_stats": buffer_stats,
-        "utilization_percent": buffer_stats.get('utilization', 0) * 100
-    }
 
 if __name__ == "__main__":
     uvicorn.run("detector:app", host=config.api.host, port=config.api.port, reload=config.api.reload)
