@@ -84,7 +84,7 @@ class VisionCoordinator:
             # Pass frame buffer reference to detector service
             set_frame_buffer(self.frame_buffer)
             
-            # Disable automatic frame processing - only manual detection via /detect-latest
+            # Disable automatic frame processing - only manual detection via /detect
             self.running = True
             # Start frame buffer population thread (sends frames to detector's buffer)
             self.buffer_thread = threading.Thread(
@@ -132,54 +132,54 @@ class VisionCoordinator:
         
         self.logger.info("Vision Service stopped")
     
-    def _add_frame_to_detector_buffer(self, frame, frame_name: str):
-        """Add frame to detector's buffer via HTTP API."""
-        try:
-            import requests
-            import io
-            from PIL import Image
-            
-            # Convert frame to bytes
-            if hasattr(frame, 'save'):  # PIL Image
-                img_bytes = io.BytesIO()
-                frame.save(img_bytes, format='JPEG', quality=85)
-                frame_bytes = img_bytes.getvalue()
-            elif hasattr(frame, 'tobytes'):  # numpy array
-                if len(frame.shape) == 3:
-                    img = Image.fromarray(frame)
-                    img_bytes = io.BytesIO()
-                    img.save(img_bytes, format='JPEG', quality=85)
-                    frame_bytes = img_bytes.getvalue()
-                else:
-                    self.logger.error("Unsupported numpy array shape for detector buffer")
-                    return
-            elif isinstance(frame, bytes):
-                frame_bytes = frame
-            else:
-                self.logger.error(f"Unsupported frame data type for detector buffer: {type(frame)}")
-                return
-            
-            # Send frame to detector's buffer
-            detector_url = f"http://localhost:{self.detector.client.api_port}/add-frame"
-            response = requests.post(
-                detector_url,
-                data={"frame_name": frame_name},
-                files={"file": (frame_name, frame_bytes, "image/jpeg")},
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                self.logger.debug(f"Added frame {frame_name} to detector buffer")
-            else:
-                self.logger.warning(f"Failed to add frame to detector buffer: {response.status_code}")
-                try:
-                    error_detail = response.json()
-                    self.logger.warning(f"Error detail: {error_detail}")
-                except:
-                    self.logger.warning(f"Error response: {response.text}")
-                
-        except Exception as e:
-            self.logger.error(f"Error adding frame to detector buffer: {e}")
+    # def _add_frame_to_detector_buffer(self, frame, frame_name: str):
+    #     """Add frame to detector's buffer via HTTP API."""
+    #     try:
+    #         import requests
+    #         import io
+    #         from PIL import Image
+    #         
+    #         # Convert frame to bytes
+    #         if hasattr(frame, 'save'):  # PIL Image
+    #             img_bytes = io.BytesIO()
+    #             frame.save(img_bytes, format='JPEG', quality=85)
+    #             frame_bytes = img_bytes.getvalue()
+    #         elif hasattr(frame, 'tobytes'):  # numpy array
+    #             if len(frame.shape) == 3:
+    #                 img = Image.fromarray(frame)
+    #                 img_bytes = io.BytesIO()
+    #                 img.save(img_bytes, format='JPEG', quality=85)
+    #                 frame_bytes = img_bytes.getvalue()
+    #             else:
+    #                 self.logger.error("Unsupported numpy array shape for detector buffer")
+    #                 return
+    #         elif isinstance(frame, bytes):
+    #             frame_bytes = frame
+    #         else:
+    #             self.logger.error(f"Unsupported frame data type for detector buffer: {type(frame)}")
+    #             return
+    #         
+    #         # Send frame to detector's buffer
+    #         detector_url = f"http://localhost:{self.detector.client.api_port}/add-frame"
+    #         response = requests.post(
+    #             detector_url,
+    #             data={"frame_name": frame_name},
+    #             files={"file": (frame_name, frame_bytes, "image/jpeg")},
+    #             timeout=5
+    #         )
+    #         
+    #         if response.status_code == 200:
+    #             self.logger.debug(f"Added frame {frame_name} to detector buffer")
+    #         else:
+    #             self.logger.warning(f"Failed to add frame to detector buffer: {response.status_code}")
+    #             try:
+    #                 error_detail = response.json()
+    #                 self.logger.warning(f"Error detail: {error_detail}")
+    #             except:
+    #                 self.logger.warning(f"Error response: {response.text}")
+    #                 
+    #     except Exception as e:
+    #         self.logger.error(f"Error adding frame to detector buffer: {e}")
     
     def _populate_detector_buffer(self) -> None:
         """Populate detector's buffer with frames from coordinator's buffer."""
@@ -215,9 +215,9 @@ class VisionCoordinator:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
                     frame_name = f"frame_{timestamp}.jpg"
                 
-                # Send frame to detector's buffer
-                if self.detector and self.detector.is_ready():
-                    self._add_frame_to_detector_buffer(frame, frame_name)
+                # Send frame to detector's buffer (disabled - endpoint hidden)
+                # if self.detector and self.detector.is_ready():
+                #     self._add_frame_to_detector_buffer(frame, frame_name)
                 
                 # Log progress every 30 frames
                 if frame_count % 30 == 0:
@@ -323,8 +323,8 @@ class VisionCoordinator:
                 # Send frame to detector's buffer via HTTP API
                 if self.detector and self.detector.is_ready():
                     try:
-                        # Also add frame to detector's buffer
-                        self._add_frame_to_detector_buffer(frame, frame_name)
+                        # Also add frame to detector's buffer (disabled - endpoint hidden)
+                        # self._add_frame_to_detector_buffer(frame, frame_name)
                         
                         # Ensure frame_name is passed correctly
                         self.logger.debug(f"Sending frame {frame_name} to detector")
