@@ -19,7 +19,7 @@ def create_ui(coordinator: 'VisionCoordinator'):
     def call_detector_api():
         """Call the detector API to get latest detection results."""
         try:
-            response = requests.post(f"{DETECTOR_API_URL}/detect", timeout=5)
+            response = requests.get(f"{DETECTOR_API_URL}/detect-latest", timeout=5)
             if response.status_code == 200:
                 # Update timestamp when detection is successful
                 last_detection_time[0] = datetime.datetime.now()

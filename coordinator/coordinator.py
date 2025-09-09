@@ -84,7 +84,7 @@ class VisionCoordinator:
             # Pass frame buffer reference to detector service
             set_frame_buffer(self.frame_buffer)
             
-            # Disable automatic frame processing - only manual detection via /detect
+            # Disable automatic frame processing - only manual detection via /detect-latest
             self.running = True
             # Start frame buffer population thread (sends frames to detector's buffer)
             self.buffer_thread = threading.Thread(
