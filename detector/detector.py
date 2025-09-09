@@ -447,6 +447,12 @@ async def detect_default(onnx_file: str = "model.onnx",
     
     # Use default image if available
     default_image_path = config.paths.default_image
+    
+    # Make path relative to detector script location
+    if not os.path.isabs(default_image_path):
+        detector_dir = os.path.dirname(os.path.abspath(__file__))
+        default_image_path = os.path.join(detector_dir, default_image_path)
+    
     if os.path.exists(default_image_path):
         with open(default_image_path, 'rb') as f:
             contents = f.read()
@@ -521,6 +527,12 @@ async def detect(file: Optional[UploadFile] = None,
         else:
             # Fall back to default image
             default_image_path = config.paths.default_image
+            
+            # Make path relative to detector script location
+            if not os.path.isabs(default_image_path):
+                detector_dir = os.path.dirname(os.path.abspath(__file__))
+                default_image_path = os.path.join(detector_dir, default_image_path)
+            
             detector_logger.debug(f"No file provided and no buffer frames, using default image: {default_image_path}")
             if os.path.exists(default_image_path):
                 with open(default_image_path, 'rb') as f:
@@ -649,18 +661,6 @@ async def detect_latest(onnx_file: str = "model.onnx",
     
     return result
 
-@app.get("/detect-latest", response_model=InferenceResponse)
-async def detect_latest_get(onnx_file: str = "model.onnx",
-                           img_size: int = 640,
-                           conf_thres: float = 0.6,
-                           device: str = "cpu",
-                           categories_file: str = "categories.yaml"):
-    """
-    Detect objects in the latest frame from the buffer (GET version).
-    This endpoint pulls the freshest frame from the shared buffer and processes it.
-    No file upload required - uses the latest frame from the camera buffer.
-    """
-    return await detect_latest(onnx_file, img_size, conf_thres, device, categories_file)
 
 @app.post("/add-frame", include_in_schema=False)
 async def add_frame_to_buffer(file: UploadFile = File(...), frame_name: str = Form("frame.jpg")):
