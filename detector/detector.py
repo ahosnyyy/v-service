@@ -642,7 +642,7 @@ async def detect_latest_get(onnx_file: str = "model.onnx",
     return await detect_latest(onnx_file, img_size, conf_thres, device, categories_file)
 
 @app.post("/add-frame")
-async def add_frame_to_buffer(frame_data: bytes, frame_name: str = "frame.jpg"):
+async def add_frame_to_buffer(file: UploadFile = File(...), frame_name: str = Form("frame.jpg")):
     """
     Add a frame to the detector's buffer.
     This endpoint allows the coordinator to populate the detector's buffer.
@@ -654,6 +654,9 @@ async def add_frame_to_buffer(frame_data: bytes, frame_name: str = "frame.jpg"):
         initialize_frame_buffer()
     
     try:
+        # Read the uploaded file
+        frame_data = await file.read()
+        
         # Convert bytes to frame (assuming it's a JPEG image)
         from PIL import Image
         import io

@@ -164,7 +164,7 @@ class VisionCoordinator:
             response = requests.post(
                 detector_url,
                 data={"frame_name": frame_name},
-                files={"frame_data": (frame_name, frame_bytes, "image/jpeg")},
+                files={"file": (frame_name, frame_bytes, "image/jpeg")},
                 timeout=5
             )
             
@@ -172,6 +172,11 @@ class VisionCoordinator:
                 self.logger.debug(f"Added frame {frame_name} to detector buffer")
             else:
                 self.logger.warning(f"Failed to add frame to detector buffer: {response.status_code}")
+                try:
+                    error_detail = response.json()
+                    self.logger.warning(f"Error detail: {error_detail}")
+                except:
+                    self.logger.warning(f"Error response: {response.text}")
                 
         except Exception as e:
             self.logger.error(f"Error adding frame to detector buffer: {e}")
